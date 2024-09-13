@@ -1,54 +1,121 @@
+import { Request, Response } from 'express';
+import { connectToDatabase, getColunasProtegidasChamados, getColunasProtegidasAtualizacaoDeDados, getTabelasPermitidas } from '../config/bd';
 import sql from 'mssql';
-import dotenv from 'dotenv';
 
-dotenv.config();
+type QueryResult = { recordset: { COLUMN_NAME: string }[] };
 
-export async function adicionarColunas(
-  tabelas: string[],
-  poolConnection: sql.ConnectionPool
-): Promise<{ success: string[]; errors: string[] }> {
-  const success: string[] = [];
-  const errors: string[] = [];
+// Interface para a estrutura de requisição
+interface DadosRequisicao {
+  senha: string;
+  dados: {
+    [key: string]: string;
+  };
+}
 
-  for (const tabela of tabelas) {
-    // Obtenha as colunas permitidas para a tabela (exemplo com Chamados)
-    const colunasPermitidas = tabela === 'Chamados' ? process.env.PROTECTED_COLUMNS_CHAMADOS?.split(',') : [];
+/**
+ * Função auxiliar para verificar se a tabela já existe no banco de dados.
+ */
+async function verificarSeTabelaExiste(tabela: string, pool: sql.ConnectionPool): Promise<boolean> {
+  const query = `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '${tabela}'`;
+  const result = await pool.request().query(query);
+  return result.recordset.length > 0;
+}
 
-    try {
-      // Verificar se a tabela existe
-      const tabelaExisteQuery = `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '${tabela}'`;
-      const tabelaExiste = await poolConnection.request().query(tabelaExisteQuery);
+/**
+ * Função auxiliar para verificar se todas as colunas já estão presentes na tabela.
+ */
+async function verificarColunas(tabela: string, colunas: string[], pool: sql.ConnectionPool): Promise<boolean> {
+  const query = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tabela}'`;
+  const result: QueryResult = await pool.request().query(query);
+  const colunasAtuais = result.recordset.map(row => row.COLUMN_NAME);
+  return colunas.every(coluna => colunasAtuais.includes(coluna));
+}
 
-      if (tabelaExiste.recordset.length === 0) {
-        // Se a tabela não existir, criá-la
-        const queryCriarTabela = `CREATE TABLE ${tabela} (...)`; // Defina a criação das colunas aqui
-        await poolConnection.request().query(queryCriarTabela);
-        success.push(`Tabela ${tabela} criada com sucesso`);
-      } else {
-        console.log(`Tabela ${tabela} já existe.`);
+/**
+ * Cria tabelas e verifica se já estão criadas.
+ */
+export async function criarTabelas(req: Request, res: Response): Promise<void> {
+  try {
+    const pool = await connectToDatabase();
+    const tabelasPermitidas = getTabelasPermitidas();
+    const senhaProtegida = process.env.PERMISSAO_SENHA_PROTEGIDA || '';
 
-        // Verificar se as colunas já existem
-        const colunasExistentesQuery = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${tabela}'`;
-        const colunasExistentes = await poolConnection.request().query(colunasExistentesQuery);
-        const colunasPresentes = colunasExistentes.recordset.map((coluna: { COLUMN_NAME: string }) => coluna.COLUMN_NAME);
+    console.log('Requisição para criar tabelas:', req.body);
 
-        const colunasParaAdicionar = colunasPermitidas?.filter(coluna => !colunasPresentes.includes(coluna)) || [];
+    const { senha, dados } = req.body as DadosRequisicao;
 
-        if (colunasParaAdicionar.length === 0) {
-          console.log(`Todas as colunas já estão presentes na tabela ${tabela}.`);
-          success.push(`Colunas da tabela ${tabela} já estão presentes`);
-        } else {
-          // Adicionar colunas faltantes
-          const queryAdicionarColunas = `ALTER TABLE ${tabela} ADD ${colunasParaAdicionar.map(coluna => `${coluna} VARCHAR(255)`).join(', ')}`;
-          await poolConnection.request().query(queryAdicionarColunas);
-          success.push(`Colunas adicionadas à tabela ${tabela}`);
-        }
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-      errors.push(`Erro ao verificar ou adicionar colunas na tabela ${tabela}: ${errorMessage}`);
+    if (senha !== senhaProtegida) {
+      console.log('Senha inválida fornecida.');
+      res.status(403).json({ message: 'Senha inválida.' });
+      return;
     }
-  }
 
-  return { success, errors };
+    const tabelasAserCriadas = Object.values(dados) as string[];
+    const tabelasNaoPermitidas = tabelasAserCriadas.filter(tabela => !tabelasPermitidas.includes(tabela));
+
+    if (tabelasNaoPermitidas.length > 0) {
+      console.log('Tabelas não permitidas:', tabelasNaoPermitidas);
+      res.status(400).json({ message: `As seguintes tabelas não são permitidas: ${tabelasNaoPermitidas.join(', ')}` });
+      return;
+    }
+
+    for (const tabela of tabelasAserCriadas) {
+      if (tabela === 'Chamados') {
+        const colunasChamados = getColunasProtegidasChamados();
+        const tabelaExiste = await verificarSeTabelaExiste('Chamados', pool);
+        const colunasEstaoPresentes = tabelaExiste && await verificarColunas('Chamados', colunasChamados, pool);
+
+        if (tabelaExiste && colunasEstaoPresentes) {
+          console.log('A tabela Chamados e suas colunas já estão presentes no banco de dados.');
+          res.status(200).json({ message: 'As Tabelas (Chamados e colunas) foram verificadas e estão criadas no banco de dados.' });
+          continue;
+        }
+
+        const colunasChamadosQuery = colunasChamados.map(coluna => `${coluna} VARCHAR(255)`).join(', ');
+
+        const createTableQuery = `
+          IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'Chamados')
+          BEGIN
+            CREATE TABLE Chamados (
+              ${colunasChamadosQuery}
+            )
+          END
+        `;
+        console.log('Criando tabela Chamados com a query:', createTableQuery);
+
+        await pool.request().query(createTableQuery);
+      }
+
+      if (tabela === 'AtualizacaoDeDados') {
+        const colunasAtualizacao = getColunasProtegidasAtualizacaoDeDados();
+        const tabelaExiste = await verificarSeTabelaExiste('AtualizacaoDeDados', pool);
+        const colunasEstaoPresentes = tabelaExiste && await verificarColunas('AtualizacaoDeDados', colunasAtualizacao, pool);
+
+        if (tabelaExiste && colunasEstaoPresentes) {
+          console.log('A tabela AtualizacaoDeDados e suas colunas já estão presentes no banco de dados.');
+          res.status(200).json({ message: 'As Tabelas (AtualizacaoDeDados e colunas) foram verificadas e estão criadas no banco de dados.' });
+          continue;
+        }
+
+        const colunasAtualizacaoQuery = colunasAtualizacao.map(coluna => `${coluna} VARCHAR(255)`).join(', ');
+
+        const createTableQuery = `
+          IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AtualizacaoDeDados')
+          BEGIN
+            CREATE TABLE AtualizacaoDeDados (
+              ${colunasAtualizacaoQuery}
+            )
+          END
+        `;
+        console.log('Criando tabela AtualizacaoDeDados com a query:', createTableQuery);
+
+        await pool.request().query(createTableQuery);
+      }
+    }
+
+    res.status(200).json({ message: 'Tabelas criadas com sucesso.' });
+  } catch (err) {
+    console.error('Erro ao criar tabelas:', err);
+    res.status(500).json({ message: 'Erro ao criar tabelas.' });
+  }
 }
