@@ -1,17 +1,23 @@
-import http from 'http';
-import { app } from './http';
+import { serverHttp } from './http';
 import "./websocket";
-import usuarioRoutes from './routes/usuarioRoutes';
 
-const serverHttp = http.createServer(app);
+import config from './config/bd';
 
-// Início do servidor
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
-// Definindo as rotas no servidor Express
-app.use('/usuarios', usuarioRoutes);  // Isso define o prefixo /usuarios para todas as rotas de usuário
+async function startServer() {
+    try {
+        // Verificar a conexão com o banco de dados
+        await config.connectToDatabase();
+        console.log('Conexão com o banco de dados estabelecida com sucesso.');
 
-serverHttp.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
+        serverHttp.listen(PORT, () => {
+            console.log(`Servidor rodando na porta ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Erro ao iniciar o servidor:', error);
+        process.exit(1);
+    }
+}
 
+startServer();

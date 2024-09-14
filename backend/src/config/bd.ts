@@ -1,14 +1,16 @@
 import sql from 'mssql';
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
 
-/**
- * Configurações do banco de dados e conexão.
- */
 const bdConfig = {
   user: process.env.DB_USER || '',
   password: process.env.DB_PASSWORD || '',
   server: process.env.DB_SERVER || '',
   database: process.env.DB_NAME || '',
+  TABLE_ATUALIZACAO_DE_DADOS: process.env.TABLE_ATUALIZACAO_DE_DADOS || 'AtualizacaoDeDados',
+  COLUMN_DIA: process.env.COLUMN_DIA || 'dia',
+  COLUMN_HORA: process.env.COLUMN_HORA || 'hora',
+  COLUMN_TABELA: process.env.COLUMN_TABELA || 'tabela',
+  COLUMN_ACAO: process.env.COLUMN_ACAO || 'acao',
   options: {
     encrypt: true,
     trustServerCertificate: true,
@@ -19,53 +21,44 @@ const bdConfig = {
     min: 0,
     idleTimeoutMillis: 30000,
   },
-  requestTimeout: 30000, // 30 segundos
+  requestTimeout: 30000,
 };
 
-console.log('Configuração do banco de dados:', bdConfig);
+const appConfig = {
+  requestTimeout: process.env.REQUEST_TIMEOUT || '5000',
+};
 
-/**
- * Captura as colunas protegidas para a tabela Chamados a partir da variável de ambiente.
- */
-export function getColunasProtegidasChamados(): string[] {
-  const colunas = (process.env.PROTECTED_COLUMNS_CHAMADOS || '').split(',').map(coluna => coluna.trim());
-  console.log('Colunas protegidas chamados:', colunas);
-  return colunas;
-}
+const config = {
+  bdConfig,
+  appConfig,
+  protectedColumnsChamados: (process.env.PROTECTED_COLUMNS_CHAMADOS || '').split(',').map(coluna => coluna.trim()),
+  protectedColumnsAtualizacaoDeDados: (process.env.PROTECTED_COLUMNS_ATUALIZACAODEDADOS || '').split(',').map(coluna => coluna.trim()),
+  permittedTables: (process.env.PERMITTED_TABLES || '').split(',').map(tabela => tabela.trim()),
+  colunasAtualizacaoDeDados: (process.env.COLUNAS_ATUALIZACAO_DE_DADOS || '').split(',').map(coluna => coluna.trim()),
+  senhaProtegida: process.env.PERMISSAO_SENHA_PROTEGIDA || '',
 
-/**
- * Captura as colunas protegidas para a tabela AtualizacaoDeDados a partir da variável de ambiente.
- */
-export function getColunasProtegidasAtualizacaoDeDados(): string[] {
-  const colunas = (process.env.PROTECTED_COLUMNS_ATUALIZACAODEDADOS || '').split(',').map(coluna => coluna.trim());
-  console.log('Colunas protegidas atualizacao de dados:', colunas);
-  return colunas;
-}
+  async connectToDatabase(): Promise<sql.ConnectionPool> {
+    try {
+      const pool = await sql.connect(bdConfig);
+      console.log('Conectado ao banco de dados com sucesso.');
+      return pool;
+    } catch (error) {
+      console.error('Erro ao conectar ao banco de dados:', error);
+      throw new Error('Não foi possível conectar ao banco de dados');
+    }
+  },
 
-/**
- * Captura as tabelas permitidas para criação a partir da variável de ambiente.
- */
-export function getTabelasPermitidas(): string[] {
-  const tabelas = (process.env.PERMITTED_TABLES || '').split(',').map(tabela => tabela.trim());
-  console.log('Tabelas permitidas:', tabelas);
-  return tabelas;
-}
+  getColunasProtegidasChamados(): string[] {
+    return config.protectedColumnsChamados;
+  },
 
-let pool: sql.ConnectionPool;  // Tipagem do pool
+  getColunasProtegidasAtualizacaoDeDados(): string[] {
+    return config.protectedColumnsAtualizacaoDeDados;
+  },
 
-/**
- * Função para conectar ao banco de dados.
- * @returns {Promise<sql.ConnectionPool>} Pool de conexão ao banco.
- */
-export async function connectToDatabase(): Promise<sql.ConnectionPool> {
-  try {
-    pool = await sql.connect(bdConfig);
-    console.log('Conectado ao banco de dados.');
-    return pool;
-  } catch (err) {
-    console.error('Erro ao conectar ao banco de dados:', err);
-    throw err;
+  getTabelasPermitidas(): string[] {
+    return config.permittedTables;
   }
-}
+};
 
-export { sql, pool };
+export default config;
