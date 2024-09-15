@@ -1,5 +1,7 @@
 import sql from 'mssql';
+import { ColumnsMap } from './types';
 require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
+
 
 const bdConfig = {
   user: process.env.DB_USER || '',
@@ -7,10 +9,12 @@ const bdConfig = {
   server: process.env.DB_SERVER || '',
   database: process.env.DB_NAME || '',
   TABLE_ATUALIZACAO_DE_DADOS: process.env.TABLE_ATUALIZACAO_DE_DADOS || 'AtualizacaoDeDados',
-  COLUMN_DIA: process.env.COLUMN_DIA || 'dia',
-  COLUMN_HORA: process.env.COLUMN_HORA || 'hora',
-  COLUMN_TABELA: process.env.COLUMN_TABELA || 'tabela',
-  COLUMN_ACAO: process.env.COLUMN_ACAO || 'acao',
+  columnsMap: {
+    COLUMN_1: process.env.COLUMN_DIA || 'Dia',
+    COLUMN_2: process.env.COLUMN_HORA || 'Hora',
+    COLUMN_3: process.env.COLUMN_TABELA || 'Tabela',
+    COLUMN_4: process.env.COLUMN_ACAO || 'Acao',
+  }as ColumnsMap,
   options: {
     encrypt: true,
     trustServerCertificate: true,
