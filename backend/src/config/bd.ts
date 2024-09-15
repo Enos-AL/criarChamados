@@ -10,10 +10,10 @@ const bdConfig = {
   database: process.env.DB_NAME || '',
   TABLE_ATUALIZACAO_DE_DADOS: process.env.TABLE_ATUALIZACAO_DE_DADOS || 'AtualizacaoDeDados',
   columnsMap: {
-    COLUMN_1: process.env.COLUMN_DIA || 'Dia',
-    COLUMN_2: process.env.COLUMN_HORA || 'Hora',
-    COLUMN_3: process.env.COLUMN_TABELA || 'Tabela',
-    COLUMN_4: process.env.COLUMN_ACAO || 'Acao',
+    COLUMN_1: process.env.COLUMN_1 || '',
+    COLUMN_2: process.env.COLUMN_2 || '',
+    COLUMN_3: process.env.COLUMN_3 || '',
+    COLUMN_4: process.env.COLUMN_4 || '',
   }as ColumnsMap,
   options: {
     encrypt: true,
