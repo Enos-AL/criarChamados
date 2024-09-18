@@ -1,7 +1,6 @@
 import { config as dotenvConfig } from 'dotenv';
 import path from 'path';
 
-// Carregar variáveis de ambiente do arquivo .env
 dotenvConfig({ path: path.resolve(__dirname, '../../../.env') });
 
 class Config {

@@ -18,34 +18,49 @@ export async function criarTabelas(req: Request, res: Response): Promise<void> {
   const { senha, dados } = req.body;
 
   if (senha !== senhaProtegida) {
-    // Garantir que 'tabela' seja uma string antes de comparar
-    const tabelasNaoPermitidas = Object.values(dados).filter((tabela) => {
-      if (typeof tabela === 'string') {
-        return !tabelasPermitidas.includes(tabela);
-      }
-      return false;
-    });
+    // Verifica se a tabela de erros existe antes de registrar qualquer erro
+    const tabelaDeErroExiste = await verificarSeTabelaExiste(config.getTableAtualizacaoDeDados(), pool);
 
-    if (tabelasNaoPermitidas.length > 0) {
-      res.status(403).json({
-        message: 'Senha Incorreta e Tabelas Incorretas.',
-        tabelas: tabelasNaoPermitidas,
+    if (!tabelaDeErroExiste) {
+      res.status(500).json({
+        message: 'Tabelas para inserirem as informações de erros não estão disponíveis ou não existem.',
       });
-      return; // Finaliza a execução da função, mas não retorna nada
+      console.error('Tabelas para inserirem as informações de erros não estão disponíveis ou não existem.');
+      return;
     }
 
-    await handleInvalidPassword(senha, dados, pool, res);
-    return; // Finaliza a execução após chamar handleInvalidPassword
+    // Garantir que 'tabelasNaoPermitidas' seja uma string[]
+    const tabelasNaoPermitidas = Object.values(dados).filter((tabela: any) => typeof tabela === 'string' && !tabelasPermitidas.includes(tabela)) as string[];
+
+    if (tabelasNaoPermitidas.length > 0) {
+      await handleInvalidPassword(senha, tabelasNaoPermitidas, pool, res);
+      return;
+    }
+
+    // Se a senha estiver incorreta e todas as tabelas são permitidas
+    const tabelas = Object.values(dados) as string[];
+    const tabelasFormatadas = tabelas.reduce((acc: any, tabela, index) => {
+      acc[`tabela_${index + 1}`] = tabela;
+      return acc;
+    }, {});
+
+    // Responde com as tabelas fornecidas e a mensagem de erro apropriada
+    res.status(403).json({
+      message: 'Senha Incorreta e Tabelas Compatíveis.',
+      tabelas: tabelasFormatadas,
+    });
+
+    // Registrar o erro com apenas "Senha Incorreta"
+    await registrarErroGenerico('Senha Incorreta', tabelas, pool);
+    return;
   }
 
   const tabelasAserCriadas = Object.values(dados) as string[];
-
-  // Verificar novamente se as tabelas a serem criadas são permitidas
   const tabelasNaoPermitidas = tabelasAserCriadas.filter((tabela) => !tabelasPermitidas.includes(tabela));
 
   if (tabelasNaoPermitidas.length > 0) {
     await handleDisallowedTables(tabelasNaoPermitidas, dados, pool, res);
-    return; // Finaliza a execução após tratar tabelas não permitidas
+    return;
   }
 
   try {
@@ -63,24 +78,30 @@ export async function criarTabelas(req: Request, res: Response): Promise<void> {
   }
 }
 
-
-
-
-
 // Função para tratar senha inválida
-async function handleInvalidPassword(senha: string, dados: any, pool: sql.ConnectionPool, res: Response): Promise<void> {
-
+async function handleInvalidPassword(senha: string, tabelasNaoPermitidas: string[], pool: sql.ConnectionPool, res: Response): Promise<void> {
+  // Verifica se a tabela de erros existe antes de tentar registrar o erro
   const tabelaDeErroExiste = await verificarSeTabelaExiste(config.getTableAtualizacaoDeDados(), pool);
 
-  if (tabelaDeErroExiste) {
-    try {
-      await registrarErroGenerico('Senha Incorreta', dados, pool);
-    } catch (error) {
-      res.status(500).json({
-        message: 'Erro ao registrar senha inválida: Não é possível inserir informações de falhas na tabela \'AtualizacaoDeDados\' porque uma ou mais colunas estão incorretas.'
-      });
-      return;
-    }
+  if (!tabelaDeErroExiste) {
+    res.status(500).json({
+      message: 'Tabelas para inserirem as informações de erros não estão disponíveis ou não existem.',
+    });
+    console.error('Tabelas para inserirem as informações de erros não estão disponíveis ou não existem.');
+    return;
+  }
+
+  const mensagemErro = tabelasNaoPermitidas.length > 0 
+    ? 'Senha Incorreta e Tabelas Incorretas' 
+    : 'Senha Incorreta';
+
+  try {
+    await registrarErroGenerico(mensagemErro, tabelasNaoPermitidas.length > 0 ? tabelasNaoPermitidas : null, pool);
+  } catch (error) {
+    res.status(500).json({
+      message: 'Erro ao registrar senha inválida: Não é possível inserir informações de falhas na tabela \'AtualizacaoDeDados\' porque uma ou mais colunas estão incorretas.'
+    });
+    return;
   }
 
   res.status(403).json({
@@ -89,7 +110,6 @@ async function handleInvalidPassword(senha: string, dados: any, pool: sql.Connec
       : 'Senha inválida. A tabela para registrar erros não está disponível.'
   });
 }
-
 
 // Função para tratar tabelas não permitidas
 async function handleDisallowedTables(
@@ -114,7 +134,6 @@ async function handleDisallowedTables(
     message: `As seguintes tabelas não são permitidas: ${tabelasNaoPermitidas.join(', ')}. Erro registrado na tabela de atualizações.`
   });
 }
-
 
 // Função para criar tabelas e colunas
 async function criarTabelasEColunas(tabelasAserCriadas: string[], tabelasPermitidas: string[], pool: sql.ConnectionPool): Promise<string[]> {
@@ -155,9 +174,6 @@ async function adicionarColunasFaltantes(tabela: string, colunas: { position: nu
   }
 }
 
-
-
-
 // Função para obter colunas atuais de uma tabela
 async function obterColunasAtuais(tabela: string, poolConnection: sql.ConnectionPool): Promise<string[]> {
   try {
@@ -172,18 +188,20 @@ async function obterColunasAtuais(tabela: string, poolConnection: sql.Connection
 }
 
 // Função para verificar se a tabela existe
-async function verificarSeTabelaExiste(tabela: string, poolConnection: sql.ConnectionPool): Promise<boolean> {
+async function verificarSeTabelaExiste(nomeTabela: string, poolConnection: sql.ConnectionPool): Promise<boolean> {
+  const query = `SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @nomeTabela`;
+
   try {
-    const query = `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tabela`;
     const result = await poolConnection.request()
-      .input('tabela', sql.NVarChar, tabela)  // Substitui o parâmetro 'tabela' na query
+      .input('nomeTabela', sql.NVarChar, nomeTabela)
       .query(query);
-    return result.recordset.length > 0; // Se o número de resultados for maior que 0, a tabela existe
-  } catch (err) {
-    throw err;  // Lança o erro novamente para ser tratado pela função chamadora
+    
+    return result.recordset.length > 0;
+  } catch (error) {
+    console.error(`Erro ao verificar a existência da tabela ${nomeTabela}:`, error);
+    return false;
   }
 }
-
 
 // Função para tratar erros
 async function handleError(err: unknown, dados: any, pool: sql.ConnectionPool, res: Response): Promise<void> {
@@ -214,13 +232,9 @@ async function handleError(err: unknown, dados: any, pool: sql.ConnectionPool, r
   }
 }
 
-
-
-
-
 async function registrarErroGenerico(
   erro: string,
-  tabelaErrada: string | string[] | null,
+  tabelaErrada: string[] | null,
   poolConnection: sql.ConnectionPool
 ): Promise<void> {
   const config = Config.getInstance();
@@ -231,13 +245,9 @@ async function registrarErroGenerico(
     throw new Error('Erro: As colunas para a tabela de atualização de dados não estão configuradas.');
   }
 
-  let tabelaErradaFormatted: string | null = null;
-
-  if (tabelaErrada) {
-    tabelaErradaFormatted = Array.isArray(tabelaErrada)
-      ? JSON.stringify({ tabelas: tabelaErrada })
-      : JSON.stringify({ tabela: tabelaErrada });
-  }
+  const tabelaErradaFormatted = tabelaErrada && tabelaErrada.length > 0 
+    ? JSON.stringify({ tabelas: tabelaErrada }) 
+    : null;
 
   const valoresMapeados: { [key: string]: string | null } = {
     [colunas[2].name]: new Date().toLocaleDateString(),
@@ -256,11 +266,6 @@ async function registrarErroGenerico(
   colunas.forEach((coluna, index) => {
     request.input(`valor${index + 1}`, sql.NVarChar, valores[index]);
   });
-
-  try {
-    await request.query(query);
-  } catch (error) {
-    console.error('Erro ao inserir dados na tabela de atualizações:', error);
-    throw new Error(`Erro ao inserir dados na tabela de atualizações: ${(error as Error).message}`);
-  }
 }
+
+
