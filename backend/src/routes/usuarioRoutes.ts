@@ -4,7 +4,7 @@ import { body, validationResult } from 'express-validator';
 
 const router = Router();
 
-// Validação e sanitização
+// Validação e sanitização para criar tabelas
 router.post('/criarTabelas', [
     body('senha').trim().isLength({ min: 1 }).withMessage('Senha é obrigatória'),
     body('dados').isObject().withMessage('Dados devem ser um objeto')
@@ -15,5 +15,6 @@ router.post('/criarTabelas', [
     }
     next();
 }, criarTabelas);
+
 
 export default router;

@@ -1,49 +1,24 @@
-import sql from 'mssql';
-import { ColumnsMap } from './types';
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
+import sql from 'mssql'; 
+import Config from './config';
 
-
-const bdConfig = {
-  user: process.env.DB_USER || '',
-  password: process.env.DB_PASSWORD || '',
-  server: process.env.DB_SERVER || '',
-  database: process.env.DB_NAME || '',
-  TABLE_ATUALIZACAO_DE_DADOS: process.env.TABLE_ATUALIZACAO_DE_DADOS || 'AtualizacaoDeDados',
-  columnsMap: {
-    COLUMN_1: process.env.COLUMN_1 || '',
-    COLUMN_2: process.env.COLUMN_2 || '',
-    COLUMN_3: process.env.COLUMN_3 || '',
-    COLUMN_4: process.env.COLUMN_4 || '',
-  }as ColumnsMap,
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-  },
-  port: parseInt(process.env.DB_PORT || '1433', 10),
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-  requestTimeout: 30000,
-};
-
-const appConfig = {
-  requestTimeout: process.env.REQUEST_TIMEOUT || '5000',
-};
+// Instanciar a configuração
+const configInstance = Config.getInstance();
+const dbConfig = configInstance.getDbConfig();
 
 const config = {
-  bdConfig,
-  appConfig,
-  protectedColumnsChamados: (process.env.PROTECTED_COLUMNS_CHAMADOS || '').split(',').map(coluna => coluna.trim()),
-  protectedColumnsAtualizacaoDeDados: (process.env.PROTECTED_COLUMNS_ATUALIZACAODEDADOS || '').split(',').map(coluna => coluna.trim()),
-  permittedTables: (process.env.PERMITTED_TABLES || '').split(',').map(tabela => tabela.trim()),
-  colunasAtualizacaoDeDados: (process.env.COLUNAS_ATUALIZACAO_DE_DADOS || '').split(',').map(coluna => coluna.trim()),
-  senhaProtegida: process.env.PERMISSAO_SENHA_PROTEGIDA || '',
+  bdConfig: dbConfig,
+  appConfig: configInstance.getAppConfig(),
+  protectedColumnsChamados: configInstance.getProtectedColumnsChamados(),
+  protectedColumnsAtualizacaoDeDados: configInstance.getProtectedColumnsAtualizacaoDeDados(),
+  permittedTables: configInstance.getPermittedTables(),
+  colunasAtualizacaoDeDados: configInstance.getColunasAtualizacaoDeDados(),
+  senhaProtegida: configInstance.getSenhaProtegida(),
+  columnsChamados: configInstance.getColumnsChamados(),
+  tableAtualizacaoDeDados: configInstance.getTableAtualizacaoDeDados(),
 
   async connectToDatabase(): Promise<sql.ConnectionPool> {
     try {
-      const pool = await sql.connect(bdConfig);
+      const pool = await sql.connect(this.bdConfig);
       console.log('Conectado ao banco de dados com sucesso.');
       return pool;
     } catch (error) {
@@ -52,16 +27,93 @@ const config = {
     }
   },
 
+  // Função que registra atualizações e verifica as tabelas permitidas e não permitidas
+  async registrarAtualizacao(tabelas: string[], senha: string): Promise<void> {
+    try {
+      const tabelasPermitidas = this.getTabelasPermitidas();
+      const tabelasNaoPermitidas = tabelas.filter(tabela => !tabelasPermitidas.includes(tabela));
+
+      // Verifica a senha e cria a mensagem da coluna 'Tabela'
+      let mensagemTabela = '';
+
+      if (senha !== this.senhaProtegida) {
+        mensagemTabela = 'Senha Incorreta';
+      } else if (tabelasNaoPermitidas.length === 0) {
+        mensagemTabela = 'Todas as tabelas conferem';
+      } else {
+        mensagemTabela = JSON.stringify({ tabelasNaoPermitidas });
+      }
+
+      // Conectar ao banco e registrar a atualização
+      const pool = await this.connectToDatabase();
+      const query = `
+        INSERT INTO ${this.tableAtualizacaoDeDados} (Tabela, Mensagem)
+        VALUES (@Tabela, @Mensagem)
+      `;
+      await pool.request()
+        .input('Tabela', sql.NVarChar, mensagemTabela)
+        .input('Mensagem', sql.NVarChar, 'Atualização realizada.')
+        .query(query);
+
+      console.log('Atualização registrada com sucesso.');
+
+    } catch (error) {
+      console.error('Erro ao registrar atualização:', error);
+      throw error;
+    }
+  },
+
+  async obterColunasAtuais(tabela: string): Promise<string[]> {
+    try {
+      const pool = await this.connectToDatabase();
+      const query = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @tabela`;
+      const result = await pool.request()
+        .input('tabela', sql.NVarChar, tabela)
+        .query(query);
+      return result.recordset.map((row: any) => row.COLUMN_NAME);
+    } catch (error) {
+      console.error('Erro ao obter colunas atuais:', (error as Error).message);
+      throw error;
+    }
+  },
+
+  // Função que verifica se as colunas protegidas de uma tabela estão presentes nas colunas atuais
+  async verificarColunasProtegidas(tabela: string): Promise<boolean> {
+    try {
+      const colunasAtuais = await this.obterColunasAtuais(tabela);
+      const colunasProtegidas = this.getColunasProtegidasPorTabela(tabela);
+
+      return colunasProtegidas.every(coluna => colunasAtuais.includes(coluna));
+    } catch (error) {
+      console.error('Erro ao verificar colunas protegidas:', error);
+      throw error;
+    }
+  },
+
+  // Função que retorna as colunas protegidas com base na tabela
+  getColunasProtegidasPorTabela(tabela: string): string[] {
+    if (tabela === 'Chamados') {
+      return this.getColunasProtegidasChamados();
+    } else if (tabela === 'AtualizacaoDeDados') {
+      return this.getColunasProtegidasAtualizacaoDeDados();
+    }
+    return [];
+  },
+
   getColunasProtegidasChamados(): string[] {
-    return config.protectedColumnsChamados;
+    return this.protectedColumnsChamados;
   },
 
   getColunasProtegidasAtualizacaoDeDados(): string[] {
-    return config.protectedColumnsAtualizacaoDeDados;
+    return this.protectedColumnsAtualizacaoDeDados;
   },
 
   getTabelasPermitidas(): string[] {
-    return config.permittedTables;
+    return this.permittedTables;
+  },
+
+  getTableAtualizacaoDeDados(): string {
+    return this.tableAtualizacaoDeDados;
   }
 };
 
