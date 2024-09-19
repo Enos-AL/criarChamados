@@ -11,18 +11,16 @@ async function connectToDatabase(): Promise<sql.ConnectionPool> {
 }
 
 // Função para verificar se a tabela existe
-async function verificarSeTabelaExiste(nomeTabela: string, poolConnection: sql.ConnectionPool): Promise<boolean> {
-  const query = `SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @nomeTabela`;
-
+async function verificarSeTabelaExiste(tabela: string, poolConnection: sql.ConnectionPool): Promise<boolean> {
   try {
+    const query = `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tabela`;
     const result = await poolConnection.request()
-      .input('nomeTabela', sql.NVarChar, nomeTabela)
+      .input('tabela', sql.NVarChar, tabela)  // Substitui o parâmetro 'tabela' na query
       .query(query);
-    
-    return result.recordset.length > 0;
-  } catch (error) {
-    console.error(`Erro ao verificar a existência da tabela ${nomeTabela}:`, error);
-    return false;
+    return result.recordset.length > 0; // Se o número de resultados for maior que 0, a tabela existe
+  } catch (err) {
+    console.error('Erro ao verificar se a tabela existe:', (err as Error).message);
+    throw err;  // Lança o erro novamente para ser tratado pela função chamadora
   }
 }
 
@@ -35,6 +33,7 @@ async function obterColunasAtuais(tabela: string, poolConnection: sql.Connection
       .query(query);
     return result.recordset.map((row: any) => row.COLUMN_NAME); // Retorna uma lista com os nomes das colunas
   } catch (err) {
+    console.error('Erro ao obter colunas atuais:', (err as Error).message);
     throw err;  // Lança o erro para ser tratado externamente
   }
 }
@@ -55,10 +54,11 @@ async function criarTabelasEColunas(tabelasAserCriadas: string[], tabelasPermiti
 
       if (!tabelaExiste) {
         const createTableQuery = `CREATE TABLE [${tabela}] (${colunasQuery})`;
+        console.log(`Criando tabela ${tabela} com a query:`, createTableQuery);
         await pool.request().query(createTableQuery);
         tabelasEColunasCriadas.push(`${tabela} e suas colunas foram criadas.`);
       } else {
-        await adicionarColunasFaltantes(tabela, colunas, pool, tabelasEColunasCriadas);
+        await verificarIncompatibilidadesColunas(tabela, colunas, pool, tabelasEColunasCriadas);
       }
     }
   }
@@ -66,15 +66,32 @@ async function criarTabelasEColunas(tabelasAserCriadas: string[], tabelasPermiti
   return tabelasEColunasCriadas;
 }
 
-// Função para adicionar colunas faltantes
-async function adicionarColunasFaltantes(tabela: string, colunas: { position: number, name: string }[], pool: sql.ConnectionPool, tabelasEColunasCriadas: string[]): Promise<void> {
+// Nova função para verificar incompatibilidades entre colunas
+async function verificarIncompatibilidadesColunas(tabela: string, colunasConfig: { position: number, name: string }[], pool: sql.ConnectionPool, tabelasEColunasCriadas: string[]): Promise<void> {
   const colunasAtuais = await obterColunasAtuais(tabela, pool);
-  const colunasNaoExistem = colunas.filter(coluna => !colunasAtuais.includes(coluna.name));
 
-  if (colunasNaoExistem.length > 0) {
-    const adicionarColunasQuery = colunasNaoExistem.map(coluna => `ALTER TABLE [${tabela}] ADD [${coluna.name}] VARCHAR(255)`).join('; ');
-    await pool.request().query(adicionarColunasQuery);
-    tabelasEColunasCriadas.push(`Colunas ${colunasNaoExistem.map(coluna => coluna.name).join(', ')} adicionadas na tabela ${tabela}.`);
+  const incompatibilidades: string[] = [];
+
+  // Verifica cada coluna configurada
+  for (const colunaConfig of colunasConfig) {
+    const colunaAtual = colunasAtuais[colunaConfig.position - 1]; // Verifica a posição exata da coluna
+    if (!colunaAtual || colunaAtual !== colunaConfig.name) {
+      incompatibilidades.push(`COLUMN_${colunaConfig.position}=${colunaConfig.name}`);
+    }
+  }
+
+  if (incompatibilidades.length > 0) {
+    const colunasAtuaisMsg = colunasAtuais
+      .map((coluna, index) => `COLUMN_${index + 1}=${coluna}`)
+      .join(', ');
+
+    const erroMessage = `Colunas já existente na tabela: ${colunasAtuaisMsg}`;  // const erroMessage = `Erro ao criar colunas ${incompatibilidades.join(', ')}, porque na tabela possui ${colunasAtuaisMsg}.`;
+
+    // Lançar o erro incluindo o nome da coluna que causou o problema
+    throw {
+      message: erroMessage,
+      detalhes: `Nomes de colunas inválidas '${incompatibilidades.map(col => col.split('=')[1]).join(', ')}'`
+    };
   }
 }
 
@@ -118,7 +135,6 @@ async function handleInvalidPassword(
   }
 }
 
-
 // Função para tratar tabelas não permitidas
 async function handleDisallowedTables(
   tabelasNaoPermitidas: string[], 
@@ -126,6 +142,7 @@ async function handleDisallowedTables(
   pool: sql.ConnectionPool, 
   res: Response
 ): Promise<void> {
+  console.log('Tabelas não permitidas:', tabelasNaoPermitidas);
 
   const tabelaDeErroExiste = await verificarSeTabelaExiste(config.getTableAtualizacaoDeDados(), pool);
 
@@ -133,6 +150,7 @@ async function handleDisallowedTables(
     try {
       await registrarErroGenerico('Tabelas Não Permitidas', tabelasNaoPermitidas, pool);
     } catch (error) {
+      console.error('Erro ao registrar erro de tabelas não permitidas:', (error as Error).message);
       res.status(500).json({ message: 'Erro ao registrar tabelas não permitidas: Não é possível inserir informações de falhas na tabela \'AtualizacaoDeDados\' porque uma ou mais colunas estão incorretas.' });
       return;
     }
@@ -145,30 +163,26 @@ async function handleDisallowedTables(
 
 // Função para tratar erros
 async function handleError(err: unknown, dados: any, pool: sql.ConnectionPool, res: Response): Promise<void> {
-  if (err instanceof Error) {
-    if (err.message.includes('Coluna com nome inválido')) {
-      res.status(500).json({ message: 'Erro ao registrar erro: Uma ou mais colunas não estão configuradas corretamente.' });
-    } else {
-      const tabelaDeErroExiste = await verificarSeTabelaExiste(config.getTableAtualizacaoDeDados(), pool);
+  if (typeof err === 'object' && err !== null && 'message' in err && 'detalhes' in err) {
+    const errorObj = err as { message: string, detalhes: string };
 
-      if (tabelaDeErroExiste) {
-        try {
-          await registrarErroGenerico('Erro ao criar tabelas', dados, pool);
-        } catch (error) {
-          if (error instanceof Error) {
-            console.error('Erro ao registrar erro ao criar tabelas:', error.message);
-          }
-          res.status(500).json({ message: 'Erro ao registrar erro ao criar tabelas: Uma ou mais colunas não estão configuradas corretamente.' });
-          return;  // Apenas saia da função, sem retornar o objeto Response
-        }
-        res.status(500).json({ message: 'Erro ao criar tabelas. Erro registrado na tabela de atualizações.' });
-      } else {
-        res.status(500).json({ message: 'Erro ao criar tabelas. A tabela para registrar erros não está disponível.' });
-      }
+    console.error(`Erro: ${errorObj.message}`);
+    console.error(`Erro: ${errorObj.detalhes}`);
+
+    // Consolidando as mensagens para a resposta HTTP
+    res.status(500).json({
+      error: errorObj.message,
+      detalhes: errorObj.detalhes
+    });
+
+    try {
+      await registrarErroGenerico(errorObj.message, dados, pool);
+    } catch (registroErro) {
+      const registroErroMsg = `Erro ao inserir dados na tabela de atualizações: ${(registroErro as Error).message}`;
+      // Aqui, só logamos o erro, pois já enviamos uma resposta HTTP.
     }
   } else {
-    const errorMessage = String(err);  // Converte unknown para string
-    res.status(500).json({ message: `Erro desconhecido ao criar tabelas: ${errorMessage}` });
+
   }
 }
 
@@ -176,7 +190,8 @@ async function handleError(err: unknown, dados: any, pool: sql.ConnectionPool, r
 async function registrarErroGenerico(
   erro: string,
   tabelaErrada: string | string[] | null,
-  poolConnection: sql.ConnectionPool
+  poolConnection: sql.ConnectionPool,
+  detalhes?: string // Adicionando o campo "detalhes" opcionalmente
 ): Promise<void> {
   const config = Config.getInstance();
   const tabelaAtualizacao = config.getTableAtualizacaoDeDados();
@@ -198,12 +213,13 @@ async function registrarErroGenerico(
     [colunas[2].name]: new Date().toLocaleDateString(),
     [colunas[3].name]: new Date().toLocaleTimeString(),
     [colunas[4].name]: tabelaErradaFormatted,
-    [colunas[5].name]: erro
+    [colunas[5].name]: erro,
+    [colunas[6]?.name || 'detalhes']: detalhes || null // Adicionando detalhes do erro
   };
 
   const valores = colunas.map(coluna => valoresMapeados[coluna.name] || null);
 
-  const query = `INSERT INTO ${tabelaAtualizacao} (${colunas.map(col => `[${col.name}]`).join(', ')})
+  const query = `INSERT INTO ${tabelaAtualizacao} (${colunas.map(col => `[${col.name}]`).join(', ')} )
     VALUES (${colunas.map((_, i) => `@valor${i + 1}`).join(', ')})`;
 
   const request = poolConnection.request();
@@ -216,7 +232,7 @@ async function registrarErroGenerico(
     await request.query(query);
     console.log('Erro registrado com sucesso.');
   } catch (error) {
-    console.error('Erro ao inserir dados na tabela de atualizações:', error);
+    console.error('Erro ao inserir dados na tabela de atualizações:');
     throw new Error(`Erro ao inserir dados na tabela de atualizações: ${(error as Error).message}`);
   }
 }
