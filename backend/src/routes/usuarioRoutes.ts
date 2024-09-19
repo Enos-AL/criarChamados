@@ -17,7 +17,7 @@ router.post('/criarTabelas', [
     next();
 }, criarTabelas);
 
-// Nova rota para validar tabelas
+// Rota para validar tabelas
 router.post('/validarTabelas', [
     body('tabelas').isArray().withMessage('Tabelas devem ser um array válido')
 ], (req: Request, res: Response, next: NextFunction) => {
@@ -28,7 +28,7 @@ router.post('/validarTabelas', [
     next();
 }, handleValidarTabelas);
 
-// Nova rota para atualização de dados
+// Rota para atualização de dados
 router.post('/atualizarDados', [
     body('tabelas').isArray().withMessage('Tabelas devem ser um array'),
     body('senha').trim().isLength({ min: 1 }).withMessage('Senha é obrigatória')

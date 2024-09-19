@@ -138,7 +138,7 @@ async connectToDatabase(): Promise<sql.ConnectionPool> {
       [colunas[3].name]: new Date().toLocaleTimeString(),
       [colunas[4].name]: tabelaErradaFormatted,
       [colunas[5].name]: erro,
-      [colunas[6]?.name || 'detalhes']: detalhes || null // Adicionando detalhes do erro
+      [colunas[6]?.name || 'detalhes']: detalhes || null 
     };
 
     const valores = colunas.map(coluna => valoresMapeados[coluna.name] || null);

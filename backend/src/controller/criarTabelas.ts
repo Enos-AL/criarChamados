@@ -4,7 +4,6 @@ import Config from '../config/config';
 
 const config = Config.getInstance();
 
-
 // Função para verificar se a tabela existe
 async function verificarSeTabelaExiste(nomeTabela: string, pool: sql.ConnectionPool): Promise<boolean> {
   try {
@@ -198,7 +197,6 @@ export async function handleAtualizacaoDeDados(req: Request, res: Response): Pro
   }
 }
 
-
 // Função para tratar erros
 async function handleError(err: unknown, dados: any, pool: sql.ConnectionPool, res: Response): Promise<void> {
   if (typeof err === 'object' && err !== null && 'message' in err && 'detalhes' in err) {
@@ -223,7 +221,6 @@ async function handleError(err: unknown, dados: any, pool: sql.ConnectionPool, r
 
   }
 }
-
 
 // Função principal para criar tabelas
 export async function criarTabelas(req: Request, res: Response): Promise<void> {
