@@ -1,7 +1,7 @@
-import sql from 'mssql'; 
+// src/config/bd.ts
+import sql from 'mssql';
 import Config from './config';
 
-// Instanciar a configuração
 const configInstance = Config.getInstance();
 const dbConfig = configInstance.getDbConfig();
 
@@ -27,13 +27,11 @@ const config = {
     }
   },
 
-  // Função que registra atualizações e verifica as tabelas permitidas e não permitidas
   async registrarAtualizacao(tabelas: string[], senha: string): Promise<void> {
     try {
       const tabelasPermitidas = this.getTabelasPermitidas();
       const tabelasNaoPermitidas = tabelas.filter(tabela => !tabelasPermitidas.includes(tabela));
 
-      // Verifica a senha e cria a mensagem da coluna 'Tabela'
       let mensagemTabela = '';
 
       if (senha !== this.senhaProtegida) {
@@ -44,13 +42,12 @@ const config = {
         mensagemTabela = JSON.stringify({ tabelasNaoPermitidas });
       }
 
-      // Conectar ao banco e registrar a atualização
-      const pool = await this.connectToDatabase();
+      const pool = await this.connectToDatabase(); // Corrigido: Usar await aqui
       const query = `
         INSERT INTO ${this.tableAtualizacaoDeDados} (Tabela, Mensagem)
         VALUES (@Tabela, @Mensagem)
       `;
-      await pool.request()
+      await pool.request() // Corrigido: Certifique-se de que pool é uma instância de ConnectionPool
         .input('Tabela', sql.NVarChar, mensagemTabela)
         .input('Mensagem', sql.NVarChar, 'Atualização realizada.')
         .query(query);
@@ -65,9 +62,9 @@ const config = {
 
   async obterColunasAtuais(tabela: string): Promise<string[]> {
     try {
-      const pool = await this.connectToDatabase();
+      const pool = await this.connectToDatabase(); // Corrigido: Usar await aqui
       const query = `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @tabela`;
-      const result = await pool.request()
+      const result = await pool.request() // Corrigido: Certifique-se de que pool é uma instância de ConnectionPool
         .input('tabela', sql.NVarChar, tabela)
         .query(query);
       return result.recordset.map((row: any) => row.COLUMN_NAME);
@@ -77,7 +74,6 @@ const config = {
     }
   },
 
-  // Função que verifica se as colunas protegidas de uma tabela estão presentes nas colunas atuais
   async verificarColunasProtegidas(tabela: string): Promise<boolean> {
     try {
       const colunasAtuais = await this.obterColunasAtuais(tabela);
@@ -90,7 +86,6 @@ const config = {
     }
   },
 
-  // Função que retorna as colunas protegidas com base na tabela
   getColunasProtegidasPorTabela(tabela: string): string[] {
     if (tabela === 'Chamados') {
       return this.getColunasProtegidasChamados();

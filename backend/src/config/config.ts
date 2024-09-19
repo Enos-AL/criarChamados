@@ -1,11 +1,13 @@
+// src/config/config.ts
 import { config as dotenvConfig } from 'dotenv';
+import sql from 'mssql';
 import path from 'path';
 
 dotenvConfig({ path: path.resolve(__dirname, '../../../.env') });
 
 class Config {
   private static instance: Config;
-  
+
   private constructor() { }
 
   public static getInstance(): Config {
@@ -101,6 +103,64 @@ class Config {
   public getTableAtualizacaoDeDados() {
     return process.env.TABELA_ATUALIZACAO_DE_DADOS || 'AtualizacaoDeDados';
   }
+
+  // Função para conectar ao banco de dados
+async connectToDatabase(): Promise<sql.ConnectionPool> {
+  const dbConfig = this.getDbConfig();
+  return await sql.connect(dbConfig);
+}
+
+  async registrarErroGenerico(
+    erro: string,
+    tabelaErrada: string | string[] | null,
+    poolConnection: sql.ConnectionPool,
+    detalhes?: string 
+  ): Promise<void> {
+
+    const config = Config.getInstance();
+    const tabelaAtualizacao = config.getTableAtualizacaoDeDados();
+    const colunas = config.getColunasAtualizacaoDeDados();
+
+    if (!colunas || colunas.length === 0) {
+      throw new Error('Erro: As colunas para a tabela de atualização de dados não estão configuradas.');
+    }
+
+    let tabelaErradaFormatted: string | null = null;
+
+    if (tabelaErrada) {
+      tabelaErradaFormatted = Array.isArray(tabelaErrada)
+        ? JSON.stringify({ tabelas: tabelaErrada })
+        : JSON.stringify({ tabela: tabelaErrada });
+    }
+
+    const valoresMapeados: { [key: string]: string | null } = {
+      [colunas[2].name]: new Date().toLocaleDateString(),
+      [colunas[3].name]: new Date().toLocaleTimeString(),
+      [colunas[4].name]: tabelaErradaFormatted,
+      [colunas[5].name]: erro,
+      [colunas[6]?.name || 'detalhes']: detalhes || null // Adicionando detalhes do erro
+    };
+
+    const valores = colunas.map(coluna => valoresMapeados[coluna.name] || null);
+
+    const query = `INSERT INTO ${tabelaAtualizacao} (${colunas.map(col => `[${col.name}]`).join(', ')} )
+      VALUES (${colunas.map((_, i) => `@valor${i + 1}`).join(', ')})`;
+
+    const request = poolConnection.request();
+
+    colunas.forEach((coluna, index) => {
+      request.input(`valor${index + 1}`, sql.NVarChar, valores[index]);
+    });
+
+    try {
+      await request.query(query);
+      console.log('Erro registrado com sucesso.');
+    } catch (error) {
+      console.error('Erro ao inserir dados na tabela de atualizações:');
+      throw new Error(`Erro ao inserir dados na tabela de atualizações: ${(error as Error).message}`);
+    }
+  }
+
 }
 
 export default Config;
