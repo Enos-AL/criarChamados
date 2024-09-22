@@ -3,6 +3,7 @@ import sql from 'mssql';
 import { config } from 'dotenv';
 import path from 'path';
 
+
 config({ path: path.resolve(__dirname, '../../../.env') });
 
 export default async function conectarBanco() {
@@ -38,3 +39,4 @@ export default async function conectarBanco() {
     }
 }
 
+// Proximo arquivo

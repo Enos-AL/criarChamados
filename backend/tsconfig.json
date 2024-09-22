@@ -1,20 +1,30 @@
 {
-    "compilerOptions": {
-      "target": "ES6",
-      "module": "commonjs",
-      "outDir": "./dist",
-      "rootDir": "./src",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true
-    },
-    "include": ["src", "../.vscode/err"],  
-    "exclude": ["node_modules"],
-    "cSpell.ignorePaths": [
-      "**/.vscode/settings.json",
-      "**/AppData/Roaming/Code/User/settings.json"
-    ]
-  }
-  
+  "compilerOptions": {
+    "target": "ES2020",                                // Define a versão do JavaScript de saída
+    "lib": ["ES2020", "DOM"],                          // Bibliotecas a serem incluídas
+    "module": "ESNext",                                // Sistema de módulos a ser utilizado
+    "outDir": "./dist",                                // Pasta onde o código transpilado será salvo
+    "rootDir": "./src",                                // Pasta raiz para o código TypeScript
+    "strict": true,                                    // Ativa o modo estrito do TypeScript
+    "esModuleInterop": true,                           // Permite interoperabilidade com módulos ES6
+    "skipLibCheck": true,                              // Pula verificação de tipos de bibliotecas de terceiros
+    "forceConsistentCasingInFileNames": true,        // Garante consistência de nomes de arquivos
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "moduleResolution": "node"                         // Mecanismo de resolução de módulos
+  },
+  "include": [
+    "src/**/*"                                           // Inclui a pasta `src` para transpilação
+  ],
+  "exclude": [
+    "node_modules",                                   // Exclui a pasta de módulos
+    "dist"                                            // Exclui a pasta de saída
+  ],
+  "cSpell.ignorePaths": [
+    "**/.vscode/settings.json",
+    "**/AppData/Roaming/Code/User/settings.json"
+  ]
+}
+
   

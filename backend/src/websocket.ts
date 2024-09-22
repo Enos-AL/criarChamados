@@ -1,33 +1,38 @@
-/* src/websocket.ts */
-import { io } from './http';
+import { Server as SocketIOServer } from 'socket.io';
+import { Server } from 'http';
 
-// Configurações do WebSocket
-export function setupWebSocket() {
-    const socket = io.of('/api');  // socket específico para a rota /api
-    socket.on('connection', (socket) => {
-        console.log('Usuário conectado ao socket /api:', socket.id);
+let io: SocketIOServer;
 
-        // Exemplo de salas
-        socket.on('joinRoom', (room) => {
+export function setupWebSocket(server: Server) {
+    io = new SocketIOServer(server, {
+        cors: {
+            origin: "*",  // Permitir todas as origens
+            methods: ["GET", "POST"]
+        }
+    });
+
+    io.on('connection', (socket) => {
+        console.log('Usuário conectado ao socket:', socket.id);
+
+        socket.on('joinRoom', (room: string) => {
             socket.join(room);
             console.log(`Usuário ${socket.id} entrou na sala ${room}`);
         });
 
-        socket.on('leaveRoom', (room) => {
+        socket.on('leaveRoom', (room: string) => {
             socket.leave(room);
             console.log(`Usuário ${socket.id} saiu da sala ${room}`);
         });
 
-        socket.on('clientMessage', (message) => {
+        socket.on('clientMessage', (message: string) => {
             console.log('Mensagem do cliente:', message);
             socket.emit('serverMessage', `Mensagem recebida: ${message}`);
         });
 
         socket.on('disconnect', () => {
-            console.log('Usuário desconectado do socket /api', socket.id);
+            console.log('Usuário desconectado do socket', socket.id);
         });
     });
-
-    return socket;
 }
 
+export { io };

@@ -1,32 +1,42 @@
-/* src/routes/usuarioRoutes.ts */
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { criarTabelas } from '../controller/criarTabelas';
-import { body } from 'express-validator';
-import { obterColunasPermitidasChamados, obterColunasPermitidasAtualizacao, verificarPermissao } from '../config/config'; // Importe a função
+import { body, validationResult } from 'express-validator';
+import { obterColunasPermitidasChamados, obterColunasPermitidasAtualizacao, verificarPermissao } from '../config/config';
 
 const router = Router();
+
+// Middleware para lidar com validação de erros
+const validarRequisicao = (req: Request, res: Response, next: Function) => {
+    const erros = validationResult(req);
+    if (!erros.isEmpty()) {
+        return res.status(400).json({ errors: erros.array() });
+    }
+    next();
+};
 
 // Rota para verificar a senha
 router.post('/verificarSenha', (req, res) => {
     const { senha } = req.body;
 
     if (!verificarPermissao(senha)) {
-        return res.status(401).json({ message: 'Senha incorreta' }); // Resposta se a senha estiver incorreta
+        return res.status(401).json({ message: 'Senha incorreta' });
     }
 
-    res.status(200).json({ message: 'Senha correta' }); // Resposta se a senha estiver correta
+    res.status(200).json({ message: 'Senha correta' });
 });
 
 // Rota para criar tabelas
 router.post('/criarTabelas', [
     body('senha').trim().isLength({ min: 8 }).withMessage('A senha deve ter pelo menos 8 caracteres.'),
     body('dados').isObject().withMessage('Os dados devem ser um objeto.'),
+    validarRequisicao
 ], criarTabelas);
 
 // Rota para obter colunas permitidas
-router.get('/colunas-permitidas', (req, res) => {
-    const senha = req.query.senha as string | undefined; // Use 'as string | undefined' para manter a compatibilidade
-    if (!senha || !verificarPermissao(senha)) { // Verifica se a senha é válida
+router.post('/colunas-permitidas', (req, res) => {
+    const { senha } = req.body;
+
+    if (!senha || !verificarPermissao(senha)) {
         return res.status(401).json({ message: 'Senha incorreta. Acesso negado.' });
     }
 
@@ -34,6 +44,5 @@ router.get('/colunas-permitidas', (req, res) => {
     const colunasAtualizacao = obterColunasPermitidasAtualizacao();
     res.json({ colunasChamados, colunasAtualizacao });
 });
-
 
 export default router;
