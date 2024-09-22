@@ -1,18 +1,32 @@
-import { namespace } from './http';
+/* src/http.ts */
+import { io } from './http';
 
 export function setupWebSocket() {
-    namespace.on('connection', (socket) => {
-        console.log('Usuário se conectou ao namespace /api', socket.id);
+    const socket = io.of('/api');  // socket específico para a rota /api
+    socket.on('connection', (socket) => {
+        console.log('Usuário conectado ao socket /api:', socket.id);
+
+        // Exemplo de salas
+        socket.on('joinRoom', (room) => {
+            socket.join(room);
+            console.log(`Usuário ${socket.id} entrou na sala ${room}`);
+        });
+
+        socket.on('leaveRoom', (room) => {
+            socket.leave(room);
+            console.log(`Usuário ${socket.id} saiu da sala ${room}`);
+        });
 
         socket.on('clientMessage', (message) => {
             console.log('Mensagem do cliente:', message);
-            namespace.emit('serverMessage', `Mensagem recebida: ${message}`);
+            socket.emit('serverMessage', `Mensagem recebida: ${message}`);
         });
 
         socket.on('disconnect', () => {
-            console.log('Usuário desconectado do namespace /api', socket.id);
+            console.log('Usuário desconectado do socket /api', socket.id);
         });
     });
 
-    return namespace;
+    return socket;
 }
+/* vou enviar o próximo arquivo */

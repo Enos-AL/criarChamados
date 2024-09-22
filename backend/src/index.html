@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Criação de Tabelas</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io('http://localhost:5001/api');
+
+        socket.on('connect', () => {
+            console.log('Conectado ao WebSocket');
+        });
+
+        async function criarTabela() {
+            const senha = document.getElementById('senha').value;
+            const nomeTabela = document.getElementById('nomeTabela').value;
+            const colunas = document.getElementById('colunas').value.split(',');
+
+            const dados = {
+                [nomeTabela]: colunas
+            };
+
+            try {
+                const response = await fetch('http://localhost:5001/api/criarTabelas', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ senha, dados })
+                });
+
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const result = await response.text();
+                console.log(result);
+                alert('Tabela criada com sucesso!');
+
+            } catch (error) {
+                console.error('Erro:', error);
+                alert(`Erro: ${error.message}`);
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Teste de Criação de Tabelas</h1>
+    <form onsubmit="event.preventDefault(); criarTabela();">
+        <label for="senha">Senha:</label>
+        <input type="password" id="senha" required>
+        
+        <label for="nomeTabela">Nome da Tabela:</label>
+        <input type="text" id="nomeTabela" required>
+
+        <label for="colunas">Colunas (separe por vírgula):</label>
+        <input type="text" id="colunas" required>
+
+        <button type="submit">Criar Tabela</button>
+    </form>
+</body>
+</html>
