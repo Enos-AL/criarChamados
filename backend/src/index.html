@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar Tabelas Dinâmico</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"> <!-- Importa Bootstrap -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css"> <!-- Importa o CSS personalizado -->
     <script src="/socket.io/socket.io.js"></script> <!-- Importa a biblioteca do Socket.io -->
+
     <script>
         const socket = io('http://localhost:5001/api'); // Inicializa a conexão com o WebSocket
 
@@ -14,95 +17,200 @@
             console.log('Conectado ao WebSocket');
         });
 
+        const tabelasPermitidas = {}; // Objeto para armazenar colunas permitidas
+
+        // Função para mostrar mensagens ao usuário
+        function mostrarMensagem(mensagem, tipo) {
+            const mensagemContainer = document.getElementById('mensagemContainer'); // Seleciona o contêiner de mensagens
+            mensagemContainer.innerHTML = `<div class="alert alert-${tipo}" role="alert">${mensagem}</div>`; // Adiciona a mensagem no contêiner
+        }
+
+        // Função para verificar a senha
+        async function verificarSenha(senha) {
+            try {
+                const response = await fetch('http://localhost:5001/api/verificarSenha', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ senha })
+                });
+
+                if (response.status === 404) {
+                    return false; // Senha incorreta
+                } else if (!response.ok) {
+                    throw new Error('Erro ao verificar a senha.');
+                }
+
+                return true; // Senha correta
+            } catch (error) {
+                console.error(error.message);
+                return false; // Retorna false se houver erro
+            }
+        }
+
+        // Função para atualizar o título e visibilidade das colunas
+        async function atualizarColunas(index) {
+            const senha = document.getElementById('senha').value; // Obtém a senha
+            const nomeTabela = document.getElementById(`tabela_${index}`).value.trim(); // Obtém o nome da tabela
+
+            // Verifica se o nome da tabela foi inserido
+            if (!nomeTabela) {
+                mostrarMensagem("Por favor, insira o nome da tabela.", 'warning');
+                document.getElementById('colunasContainer').style.display = 'none'; // Oculta o contêiner de colunas
+                return; // Interrompe a execução
+            }
+
+            // Se a senha não foi digitada, não faz nada
+            if (!senha) {
+                document.getElementById('colunasContainer').style.display = 'none'; // Oculta o contêiner de colunas
+                return; // Sai da função
+            }
+
+            // Verifica se a senha está correta somente se o nome da tabela for válido
+            const senhaValida = await verificarSenha(senha);
+
+            // Se a senha não for válida, mostra a mensagem de erro
+            if (!senhaValida) {
+                mostrarMensagem("Senha incorreta. Você só pode acessar as colunas se a senha estiver correta.", 'danger');
+                document.getElementById('colunasContainer').style.display = 'none'; // Oculta o contêiner de colunas
+                return; // Sai da função
+            }
+
+            const colunasContainer = document.getElementById('colunasContainer'); // Seleciona o contêiner de colunas
+
+            // Verifica se o nome da tabela é válido e se possui colunas
+            if (tabelasPermitidas[nomeTabela]) {
+                colunasContainer.style.display = 'block'; // Exibe o contêiner de colunas
+                gerarCheckboxes(index, nomeTabela); // Gera checkboxes para a nova tabela
+            } else {
+                colunasContainer.style.display = 'none'; // Oculta o contêiner de colunas
+                colunasContainer.innerHTML = ''; // Limpa o conteúdo se o nome não for válido
+            }
+        }
+
         // Função para criar tabelas
         async function criarTabela() {
             const senha = document.getElementById('senha').value; // Obtém a senha
             const tabelaInputs = document.querySelectorAll('.tabela-input'); // Seleciona todos os campos de entrada de tabela
 
+            // Verifica a senha antes de prosseguir
+            const senhaValida = await verificarSenha(senha);
+            if (!senhaValida) {
+                mostrarMensagem("Senha incorreta. Você só pode criar tabelas se a senha estiver correta.", 'danger');
+                return; // Interrompe a execução
+            }
+
             const dados = {};
+            let colunasSelecionadas = false; // Variável para verificar se alguma coluna foi selecionada
+
             tabelaInputs.forEach(input => {
                 if (input.value) {
-                    dados[`tabela_${input.dataset.index}`] = input.value; // Adiciona as tabelas ao objeto dados
+                    const colunas = Array.from(document.querySelectorAll(`input[name="colunas_${input.dataset.index}"]:checked`)).map(checkbox => checkbox.value); // Seleciona colunas marcadas
+                    if (colunas.length > 0) {
+                        dados[input.value] = {
+                            nome: input.value,
+                            colunas: colunas // Adiciona colunas ao objeto dados
+                        };
+                        colunasSelecionadas = true; // Marca que ao menos uma coluna foi selecionada
+                    }
                 }
             });
 
-            // Faz a requisição para criar tabelas
-            const response = await fetch('http://localhost:5001/api/criarTabelas', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ senha, dados }) // Envia a senha e os dados
-            });
+            if (!colunasSelecionadas) {
+                mostrarMensagem("Por favor, selecione pelo menos uma coluna para cada tabela.", 'warning'); // Mensagem de aviso
+                return;
+            }
 
-            const result = await response.text(); // Obtém o resultado da requisição
-            console.log(result); // Exibe resultado no console
+            try {
+                // Faz a requisição para criar tabelas
+                const response = await fetch('http://localhost:5001/api/criarTabelas', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ senha, dados }) // Envia a senha e os dados
+                });
+
+                // Verifica se a resposta não é OK
+                if (!response.ok) {
+                    const errorText = await response.text(); // Obtém o texto da resposta
+                    const mensagemAmigavel = errorText.includes("tabela já criada") ?
+                        "A tabela que você está tentando criar já existe no banco de dados." :
+                        "Ocorreu um erro ao criar a tabela. Verifique os dados e tente novamente.";
+                    mostrarMensagem(mensagemAmigavel, 'danger'); // Mostra mensagem de erro
+                    return;
+                }
+
+                const result = await response.text(); // Obtém o resultado da requisição
+                mostrarMensagem(result, 'success'); // Mostra mensagem de sucesso
+            } catch (error) {
+                mostrarMensagem('Ocorreu um erro na requisição.', 'danger'); // Mensagem de erro geral
+            }
         }
 
-        // Função para adicionar mais campos de tabela
-        function adicionarTabela() {
-            const tabelaContainer = document.getElementById('tabelaContainer'); // Obtém o contêiner de tabelas
-            const index = tabelaContainer.children.length + 1; // Obtém o índice atual
-            const div = document.createElement('div'); // Cria um novo div
-            div.classList.add('form-group'); // Adiciona classe de estilo Bootstrap
-            div.innerHTML = `
-                <label for="tabela_${index}">Nome da Tabela ${index}:</label>
-                <input type="text" id="tabela_${index}" class="form-control tabela-input" data-index="${index}" required> <!-- Campo de entrada para a tabela -->
-            `;
-            tabelaContainer.appendChild(div); // Adiciona o novo campo ao contêiner
+        // Função para gerar checkboxes de colunas permitidas para a tabela especificada
+        function gerarCheckboxes(index, nomeTabela) {
+            const colunasContainer = document.getElementById('colunasContainer'); // Seleciona o contêiner de colunas
+            colunasContainer.innerHTML = ''; // Limpa o contêiner
+
+            const colunas = tabelasPermitidas[nomeTabela] || []; // Obtém as colunas específicas da tabela
+
+            const tituloColunas = document.createElement('h5'); // Cria um título para as colunas
+            tituloColunas.textContent = `Colunas Permitidas - Tabela ${nomeTabela}`; // Define o texto do título
+            colunasContainer.appendChild(tituloColunas); // Adiciona o título ao contêiner
+
+            // Verifica se não há colunas disponíveis
+            if (colunas.length === 0) {
+                colunasContainer.innerHTML += '<p>Nenhuma coluna disponível para esta tabela.</p>'; // Mensagem de ausência de colunas
+                return; // Interrompe a execução
+            }
+
+            // Gera checkboxes para cada coluna disponível
+            colunas.forEach(coluna => {
+                const checkboxHTML = `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="colunas_${index}" value="${coluna}"> <!-- Checkbox para a coluna -->
+                        <label class="form-check-label">${coluna}</label> <!-- Label para o checkbox -->
+                    </div>
+                `;
+                colunasContainer.insertAdjacentHTML('beforeend', checkboxHTML); // Adiciona checkbox ao contêiner
+            });
         }
 
         // Função para buscar colunas permitidas
         async function fetchColunasPermitidas() {
-            const response = await fetch('http://localhost:5001/api/colunas-permitidas'); // Requisição para buscar colunas permitidas
-            
-            if (!response.ok) { // Verifica se a resposta é válida
-                console.error('Erro ao buscar colunas permitidas:', response.statusText);
-                return;
+            const senha = document.getElementById('senha').value; // Obtém a senha do input
+            if (!senha) return; // Sai se a senha estiver vazia
+
+            const response = await fetch(`http://localhost:5001/api/colunas-permitidas?senha=${senha}`); // Faz a requisição para obter colunas permitidas
+
+            // Trata resposta de erro
+            if (response.status === 401) {
+                mostrarMensagem('Senha incorreta. Acesso negado.', 'danger'); // Mensagem de erro
+                return; // Sai da função se a senha estiver incorreta
             }
 
-            const colunas = await response.json(); // Converte a resposta em JSON
-            const colunasContainer = document.getElementById('colunasPermitidas'); // Obtém o contêiner para as colunas
+            const colunas = await response.json(); // Obtém as colunas permitidas em formato JSON
+            const ulChamados = document.getElementById('colunasPermitidasChamados'); // Seleciona lista de colunas para "Chamados"
+            const ulAtualizacao = document.getElementById('colunasPermitidasAtualizacao'); // Seleciona lista de colunas para "Atualização"
 
-            // Limpa o contêiner antes de adicionar
-            colunasContainer.innerHTML = '';
+            // Limpa as listas antes de adicionar
+            ulChamados.innerHTML = '';
+            ulAtualizacao.innerHTML = '';
 
-            // Cria um cartão para as colunas de Chamados
-            const chamadoCard = document.createElement('div');
-            chamadoCard.classList.add('card', 'mb-3'); // Adiciona classes do Bootstrap
-            chamadoCard.innerHTML = `
-                <div class="card-header">
-                    Colunas Permitidas - Chamados
-                </div>
-                <ul class="list-group list-group-flush" id="colunasChamados"></ul>
-            `;
-            colunasContainer.appendChild(chamadoCard); // Adiciona o cartão ao contêiner
-
-            // Adiciona as colunas permitidas de Chamados
+            // Adiciona as colunas permitidas na lista de chamados
             colunas.colunasChamados.forEach(coluna => {
-                const li = document.createElement('li');
-                li.classList.add('list-group-item'); // Classe para estilizar o item da lista
-                li.textContent = coluna; // Define o texto da coluna
-                chamadoCard.querySelector('#colunasChamados').appendChild(li); // Adiciona à lista de chamados
+                const li = document.createElement('li'); // Cria um elemento de lista
+                li.textContent = coluna; // Define o texto do elemento
+                ulChamados.appendChild(li); // Adiciona o elemento à lista de "Chamados"
             });
 
-            // Cria um cartão para as colunas de AtualizacaoDeDados
-            const atualizacaoCard = document.createElement('div');
-            atualizacaoCard.classList.add('card', 'mb-3'); // Adiciona classes do Bootstrap
-            atualizacaoCard.innerHTML = `
-                <div class="card-header">
-                    Colunas Permitidas - Atualização de Dados
-                </div>
-                <ul class="list-group list-group-flush" id="colunasAtualizacao"></ul>
-            `;
-            colunasContainer.appendChild(atualizacaoCard); // Adiciona o cartão ao contêiner
-
-            // Adiciona as colunas permitidas de AtualizacaoDeDados
+            // Adiciona as colunas permitidas na lista de atualização
             colunas.colunasAtualizacao.forEach(coluna => {
-                const li = document.createElement('li');
-                li.classList.add('list-group-item'); // Classe para estilizar o item da lista
-                li.textContent = coluna; // Define o texto da coluna
-                atualizacaoCard.querySelector('#colunasAtualizacao').appendChild(li); // Adiciona à lista de atualização
+                const li = document.createElement('li'); // Cria um elemento de lista
+                li.textContent = coluna; // Define o texto do elemento
+                ulAtualizacao.appendChild(li); // Adiciona o elemento à lista de "Atualização"
             });
         }
 
@@ -110,10 +218,13 @@
         window.onload = fetchColunasPermitidas; // Exibe colunas permitidas na inicialização
     </script>
 </head>
+
 <body class="bg-light">
     <div class="container mt-5">
         <h1 class="text-center">Criar Tabelas Dinâmico</h1>
-        <form onsubmit="event.preventDefault(); criarTabela();" class="mt-4"> <!-- Previne o envio padrão do formulário -->
+        <div id="mensagemContainer" class="mt-4"></div> <!-- Contêiner para mensagens de erro ou sucesso -->
+        <form onsubmit="event.preventDefault(); criarTabela();" class="mt-4">
+            <!-- Previne o envio padrão do formulário -->
             <div class="form-group">
                 <label for="senha">Senha:</label>
                 <input type="password" id="senha" class="form-control" required> <!-- Campo para senha -->
@@ -122,20 +233,20 @@
             <div id="tabelaContainer"> <!-- Contêiner para os campos de tabela -->
                 <div class="form-group">
                     <label for="tabela_1">Nome da Tabela 1:</label>
-                    <input type="text" id="tabela_1" class="form-control tabela-input" data-index="1" required> <!-- Campo para a primeira tabela -->
+                    <input type="text" id="tabela_1" class="form-control tabela-input" data-index="1" required
+                        oninput="atualizarColunas(1)"> <!-- Campo para a primeira tabela -->
                 </div>
             </div>
 
-            <button type="button" class="btn btn-primary" onclick="adicionarTabela()">Adicionar Tabela</button> <!-- Botão para adicionar mais tabelas -->
             <button type="submit" class="btn btn-success">Criar Tabelas</button> <!-- Botão para enviar o formulário -->
         </form>
 
-        <h2 class="mt-5">Colunas Permitidas:</h2>
-        <div id="colunasPermitidas" class="mt-3"></div> <!-- Contêiner para exibir colunas permitidas -->
+        <div id="colunasContainer" class="mt-4 d-none"></div> <!-- Contêiner para as colunas permitidas -->
     </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script> <!-- jQuery -->
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script> <!-- Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script> <!-- Popper.js -->
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> <!-- Bootstrap JS -->
 </body>
+
 </html>
