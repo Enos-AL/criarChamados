@@ -96,5 +96,3 @@ async function obterColunasExistentes(pool: any, nomeTabela: string): Promise<st
     const result = await pool.request().query(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '${nomeTabela}'`);
     return result.recordset.map((row: any) => row.COLUMN_NAME); // Retorna um array com os nomes das colunas existentes
 }
-
-

@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Teste de Criação de Tabelas</title>
-    <script src="/socket.io/socket.io.js"></script>
+    <title>Criar Tabelas Dinâmico</title>
     <script>
         const socket = io('http://localhost:5001/api');
 
@@ -14,50 +13,52 @@
 
         async function criarTabela() {
             const senha = document.getElementById('senha').value;
-            const nomeTabela = document.getElementById('nomeTabela').value;
-            const colunas = document.getElementById('colunas').value.split(',');
+            const tabelaInputs = document.querySelectorAll('.tabela-input');
 
-            const dados = {
-                [nomeTabela]: colunas
-            };
-
-            try {
-                const response = await fetch('http://localhost:5001/api/criarTabelas', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ senha, dados })
-                });
-
-                if (!response.ok) {
-                    throw new Error(await response.text());
+            const dados = {};
+            tabelaInputs.forEach(input => {
+                if (input.value) {
+                    dados[`tabela_${input.dataset.index}`] = input.value;
                 }
+            });
 
-                const result = await response.text();
-                console.log(result);
-                alert('Tabela criada com sucesso!');
+            const response = await fetch('http://localhost:5001/criarTabelas', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ senha, dados })
+            });
 
-            } catch (error) {
-                console.error('Erro:', error);
-                alert(`Erro: ${error.message}`);
-            }
+            const result = await response.text();
+            console.log(result);
+        }
+
+        function adicionarTabela() {
+            const tabelaContainer = document.getElementById('tabelaContainer');
+            const index = tabelaContainer.children.length + 1; // Obtém o índice atual
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <label for="tabela_${index}">Nome da Tabela ${index}:</label>
+                <input type="text" id="tabela_${index}" class="tabela-input" data-index="${index}" required>
+            `;
+            tabelaContainer.appendChild(div);
         }
     </script>
 </head>
 <body>
-    <h1>Teste de Criação de Tabelas</h1>
+    <h1>Criar Tabelas Dinâmico</h1>
     <form onsubmit="event.preventDefault(); criarTabela();">
         <label for="senha">Senha:</label>
         <input type="password" id="senha" required>
-        
-        <label for="nomeTabela">Nome da Tabela:</label>
-        <input type="text" id="nomeTabela" required>
 
-        <label for="colunas">Colunas (separe por vírgula):</label>
-        <input type="text" id="colunas" required>
+        <div id="tabelaContainer">
+            <label for="tabela_1">Nome da Tabela 1:</label>
+            <input type="text" id="tabela_1" class="tabela-input" data-index="1" required>
+        </div>
 
-        <button type="submit">Criar Tabela</button>
+        <button type="button" onclick="adicionarTabela()">Adicionar Tabela</button>
+        <button type="submit">Criar Tabelas</button>
     </form>
 </body>
 </html>
