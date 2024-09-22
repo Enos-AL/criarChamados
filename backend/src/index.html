@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar Tabelas Dinâmico</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet"> <!-- Importa Bootstrap -->
     <script src="/socket.io/socket.io.js"></script> <!-- Importa a biblioteca do Socket.io -->
     <script>
         const socket = io('http://localhost:5001/api'); // Inicializa a conexão com o WebSocket
@@ -43,27 +44,65 @@
             const tabelaContainer = document.getElementById('tabelaContainer'); // Obtém o contêiner de tabelas
             const index = tabelaContainer.children.length + 1; // Obtém o índice atual
             const div = document.createElement('div'); // Cria um novo div
+            div.classList.add('form-group'); // Adiciona classe de estilo Bootstrap
             div.innerHTML = `
                 <label for="tabela_${index}">Nome da Tabela ${index}:</label>
-                <input type="text" id="tabela_${index}" class="tabela-input" data-index="${index}" required>
+                <input type="text" id="tabela_${index}" class="form-control tabela-input" data-index="${index}" required> <!-- Campo de entrada para a tabela -->
             `;
             tabelaContainer.appendChild(div); // Adiciona o novo campo ao contêiner
         }
 
         // Função para buscar colunas permitidas
         async function fetchColunasPermitidas() {
-            const response = await fetch('http://localhost:5001/api/colunas-permitidas'); // Faz a requisição ao backend
+            const response = await fetch('http://localhost:5001/api/colunas-permitidas'); // Requisição para buscar colunas permitidas
+            
+            if (!response.ok) { // Verifica se a resposta é válida
+                console.error('Erro ao buscar colunas permitidas:', response.statusText);
+                return;
+            }
+
             const colunas = await response.json(); // Converte a resposta em JSON
-            const ul = document.getElementById('colunasPermitidas'); // Obtém o elemento da lista
+            const colunasContainer = document.getElementById('colunasPermitidas'); // Obtém o contêiner para as colunas
 
-            // Limpa a lista antes de adicionar
-            ul.innerHTML = '';
+            // Limpa o contêiner antes de adicionar
+            colunasContainer.innerHTML = '';
 
-            // Adiciona as colunas permitidas na lista
-            colunas.forEach(coluna => {
+            // Cria um cartão para as colunas de Chamados
+            const chamadoCard = document.createElement('div');
+            chamadoCard.classList.add('card', 'mb-3'); // Adiciona classes do Bootstrap
+            chamadoCard.innerHTML = `
+                <div class="card-header">
+                    Colunas Permitidas - Chamados
+                </div>
+                <ul class="list-group list-group-flush" id="colunasChamados"></ul>
+            `;
+            colunasContainer.appendChild(chamadoCard); // Adiciona o cartão ao contêiner
+
+            // Adiciona as colunas permitidas de Chamados
+            colunas.colunasChamados.forEach(coluna => {
                 const li = document.createElement('li');
-                li.textContent = coluna;
-                ul.appendChild(li);
+                li.classList.add('list-group-item'); // Classe para estilizar o item da lista
+                li.textContent = coluna; // Define o texto da coluna
+                chamadoCard.querySelector('#colunasChamados').appendChild(li); // Adiciona à lista de chamados
+            });
+
+            // Cria um cartão para as colunas de AtualizacaoDeDados
+            const atualizacaoCard = document.createElement('div');
+            atualizacaoCard.classList.add('card', 'mb-3'); // Adiciona classes do Bootstrap
+            atualizacaoCard.innerHTML = `
+                <div class="card-header">
+                    Colunas Permitidas - Atualização de Dados
+                </div>
+                <ul class="list-group list-group-flush" id="colunasAtualizacao"></ul>
+            `;
+            colunasContainer.appendChild(atualizacaoCard); // Adiciona o cartão ao contêiner
+
+            // Adiciona as colunas permitidas de AtualizacaoDeDados
+            colunas.colunasAtualizacao.forEach(coluna => {
+                const li = document.createElement('li');
+                li.classList.add('list-group-item'); // Classe para estilizar o item da lista
+                li.textContent = coluna; // Define o texto da coluna
+                atualizacaoCard.querySelector('#colunasAtualizacao').appendChild(li); // Adiciona à lista de atualização
             });
         }
 
@@ -71,22 +110,32 @@
         window.onload = fetchColunasPermitidas; // Exibe colunas permitidas na inicialização
     </script>
 </head>
-<body>
-    <h1>Criar Tabelas Dinâmico</h1>
-    <form onsubmit="event.preventDefault(); criarTabela();"> <!-- Previne o envio padrão do formulário -->
-        <label for="senha">Senha:</label>
-        <input type="password" id="senha" required> <!-- Campo para senha -->
+<body class="bg-light">
+    <div class="container mt-5">
+        <h1 class="text-center">Criar Tabelas Dinâmico</h1>
+        <form onsubmit="event.preventDefault(); criarTabela();" class="mt-4"> <!-- Previne o envio padrão do formulário -->
+            <div class="form-group">
+                <label for="senha">Senha:</label>
+                <input type="password" id="senha" class="form-control" required> <!-- Campo para senha -->
+            </div>
 
-        <div id="tabelaContainer"> <!-- Contêiner para os campos de tabela -->
-            <label for="tabela_1">Nome da Tabela 1:</label>
-            <input type="text" id="tabela_1" class="tabela-input" data-index="1" required> <!-- Campo para a primeira tabela -->
-        </div>
+            <div id="tabelaContainer"> <!-- Contêiner para os campos de tabela -->
+                <div class="form-group">
+                    <label for="tabela_1">Nome da Tabela 1:</label>
+                    <input type="text" id="tabela_1" class="form-control tabela-input" data-index="1" required> <!-- Campo para a primeira tabela -->
+                </div>
+            </div>
 
-        <button type="button" onclick="adicionarTabela()">Adicionar Tabela</button> <!-- Botão para adicionar mais tabelas -->
-        <button type="submit">Criar Tabelas</button> <!-- Botão para enviar o formulário -->
-    </form>
+            <button type="button" class="btn btn-primary" onclick="adicionarTabela()">Adicionar Tabela</button> <!-- Botão para adicionar mais tabelas -->
+            <button type="submit" class="btn btn-success">Criar Tabelas</button> <!-- Botão para enviar o formulário -->
+        </form>
 
-    <h2>Colunas Permitidas:</h2>
-    <ul id="colunasPermitidas"></ul> <!-- Lista para exibir colunas permitidas -->
+        <h2 class="mt-5">Colunas Permitidas:</h2>
+        <div id="colunasPermitidas" class="mt-3"></div> <!-- Contêiner para exibir colunas permitidas -->
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script> <!-- jQuery -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script> <!-- Popper.js -->
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> <!-- Bootstrap JS -->
 </body>
 </html>

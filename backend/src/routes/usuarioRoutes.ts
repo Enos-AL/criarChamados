@@ -2,20 +2,20 @@
 import { Router } from 'express';
 import { criarTabelas } from '../controller/criarTabelas';
 import { body } from 'express-validator';
+import { obterColunasPermitidasChamados, obterColunasPermitidasAtualizacao } from '../config/config'; // Importe a função
 
 const router = Router();
 
-// Rota para criar tabelas
 router.post('/criarTabelas', [
-    body('senha')
-        .trim()
-        .isLength({ min: 8 })
-        .withMessage('A senha deve ter pelo menos 8 caracteres.'),
-    body('dados')
-        .isObject()
-        .withMessage('Os dados devem ser um objeto.'),
-    // Adicione mais validações conforme necessário
+    body('senha').trim().isLength({ min: 8 }).withMessage('A senha deve ter pelo menos 8 caracteres.'),
+    body('dados').isObject().withMessage('Os dados devem ser um objeto.'),
 ], criarTabelas);
 
-// Exporte o router para uso em outros arquivos
+// Nova rota para obter colunas permitidas
+router.get('/colunas-permitidas', (req, res) => {
+    const colunasChamados = obterColunasPermitidasChamados(); // Obtenha colunas permitidas
+    const colunasAtualizacao = obterColunasPermitidasAtualizacao();
+    res.json({ colunasChamados, colunasAtualizacao }); // Retorne as colunas como JSON
+});
+
 export default router;
