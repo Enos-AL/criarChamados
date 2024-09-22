@@ -14,4 +14,3 @@ router.post('/criarTabelas', [
 
 export default router;
 
-/* vou enviar o próximo arquivo */

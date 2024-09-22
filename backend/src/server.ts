@@ -29,4 +29,3 @@ async function startServer() {
 }
 
 startServer();
-/* vou enviar o próximo arquivo */

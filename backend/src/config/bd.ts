@@ -38,4 +38,3 @@ export default async function conectarBanco() {
     }
 }
 
-/* vou enviar o proximo arquivo */

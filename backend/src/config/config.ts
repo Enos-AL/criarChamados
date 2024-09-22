@@ -94,4 +94,3 @@ export function obterColunasPermitidasAtualizacao(): string[] {
 }
 
 
-/* vou enviar mais um arquivos */

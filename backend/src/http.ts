@@ -28,4 +28,3 @@ const io = new Server(serverHttp, {
 
 export { app, serverHttp, io };
 
-/* vou enviar o próximo arquivo */

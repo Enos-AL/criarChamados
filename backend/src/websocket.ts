@@ -29,4 +29,3 @@ export function setupWebSocket() {
 
     return socket;
 }
-/* vou enviar o próximo arquivo */
