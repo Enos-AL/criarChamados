@@ -4,61 +4,89 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Criar Tabelas Dinâmico</title>
+    <script src="/socket.io/socket.io.js"></script> <!-- Importa a biblioteca do Socket.io -->
     <script>
-        const socket = io('http://localhost:5001/api');
+        const socket = io('http://localhost:5001/api'); // Inicializa a conexão com o WebSocket
 
+        // Evento de conexão ao WebSocket
         socket.on('connect', () => {
             console.log('Conectado ao WebSocket');
         });
 
+        // Função para criar tabelas
         async function criarTabela() {
-            const senha = document.getElementById('senha').value;
-            const tabelaInputs = document.querySelectorAll('.tabela-input');
+            const senha = document.getElementById('senha').value; // Obtém a senha
+            const tabelaInputs = document.querySelectorAll('.tabela-input'); // Seleciona todos os campos de entrada de tabela
 
             const dados = {};
             tabelaInputs.forEach(input => {
                 if (input.value) {
-                    dados[`tabela_${input.dataset.index}`] = input.value;
+                    dados[`tabela_${input.dataset.index}`] = input.value; // Adiciona as tabelas ao objeto dados
                 }
             });
 
-            const response = await fetch('http://localhost:5001/criarTabelas', {
+            // Faz a requisição para criar tabelas
+            const response = await fetch('http://localhost:5001/api/criarTabelas', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ senha, dados })
+                body: JSON.stringify({ senha, dados }) // Envia a senha e os dados
             });
 
-            const result = await response.text();
-            console.log(result);
+            const result = await response.text(); // Obtém o resultado da requisição
+            console.log(result); // Exibe resultado no console
         }
 
+        // Função para adicionar mais campos de tabela
         function adicionarTabela() {
-            const tabelaContainer = document.getElementById('tabelaContainer');
+            const tabelaContainer = document.getElementById('tabelaContainer'); // Obtém o contêiner de tabelas
             const index = tabelaContainer.children.length + 1; // Obtém o índice atual
-            const div = document.createElement('div');
+            const div = document.createElement('div'); // Cria um novo div
             div.innerHTML = `
                 <label for="tabela_${index}">Nome da Tabela ${index}:</label>
                 <input type="text" id="tabela_${index}" class="tabela-input" data-index="${index}" required>
             `;
-            tabelaContainer.appendChild(div);
+            tabelaContainer.appendChild(div); // Adiciona o novo campo ao contêiner
         }
+
+        // Função para buscar colunas permitidas
+        async function fetchColunasPermitidas() {
+            const response = await fetch('http://localhost:5001/api/colunas-permitidas'); // Faz a requisição ao backend
+            const colunas = await response.json(); // Converte a resposta em JSON
+            const ul = document.getElementById('colunasPermitidas'); // Obtém o elemento da lista
+
+            // Limpa a lista antes de adicionar
+            ul.innerHTML = '';
+
+            // Adiciona as colunas permitidas na lista
+            colunas.forEach(coluna => {
+                const li = document.createElement('li');
+                li.textContent = coluna;
+                ul.appendChild(li);
+            });
+        }
+
+        // Chama a função ao carregar a página
+        window.onload = fetchColunasPermitidas; // Exibe colunas permitidas na inicialização
     </script>
 </head>
 <body>
     <h1>Criar Tabelas Dinâmico</h1>
-    <form onsubmit="event.preventDefault(); criarTabela();">
+    <form onsubmit="event.preventDefault(); criarTabela();"> <!-- Previne o envio padrão do formulário -->
         <label for="senha">Senha:</label>
-        <input type="password" id="senha" required>
+        <input type="password" id="senha" required> <!-- Campo para senha -->
 
-        <div id="tabelaContainer">
+        <div id="tabelaContainer"> <!-- Contêiner para os campos de tabela -->
             <label for="tabela_1">Nome da Tabela 1:</label>
-            <input type="text" id="tabela_1" class="tabela-input" data-index="1" required>
+            <input type="text" id="tabela_1" class="tabela-input" data-index="1" required> <!-- Campo para a primeira tabela -->
         </div>
 
-        <button type="button" onclick="adicionarTabela()">Adicionar Tabela</button>
-        <button type="submit">Criar Tabelas</button>
+        <button type="button" onclick="adicionarTabela()">Adicionar Tabela</button> <!-- Botão para adicionar mais tabelas -->
+        <button type="submit">Criar Tabelas</button> <!-- Botão para enviar o formulário -->
     </form>
+
+    <h2>Colunas Permitidas:</h2>
+    <ul id="colunasPermitidas"></ul> <!-- Lista para exibir colunas permitidas -->
 </body>
 </html>

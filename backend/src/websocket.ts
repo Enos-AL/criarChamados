@@ -1,6 +1,7 @@
-/* src/http.ts */
+/* src/websocket.ts */
 import { io } from './http';
 
+// Configurações do WebSocket
 export function setupWebSocket() {
     const socket = io.of('/api');  // socket específico para a rota /api
     socket.on('connection', (socket) => {
@@ -29,3 +30,4 @@ export function setupWebSocket() {
 
     return socket;
 }
+

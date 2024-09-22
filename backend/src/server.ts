@@ -1,6 +1,7 @@
+
 /* src/server.ts */
 import { app, serverHttp } from './http';
-import { setupWebSocket } from './websocket'; // Importe corretamente o WebSocket setup
+import { setupWebSocket } from './websocket'; // Importa corretamente o WebSocket setup
 import usuarioRoutes from './routes/usuarioRoutes';
 import conectarBanco from './config/bd';
 import { config } from 'dotenv';
@@ -15,17 +16,21 @@ async function startServer() {
         await conectarBanco();
         console.log('Conexão com o banco de dados estabelecida com sucesso.');
 
+        // Configura as rotas do usuário
         app.use('/api', usuarioRoutes);
 
-        setupWebSocket(); // Chama a função para configurar o WebSocket
+        // Configura o WebSocket
+        setupWebSocket();
 
+        // Inicia o servidor
         serverHttp.listen(PORT, () => {
             console.log(`Servidor rodando na porta ${PORT}`);
         });
     } catch (error) {
         console.error('Erro ao iniciar o servidor:', error);
-        process.exit(1);
+        process.exit(1); // Encerra o processo em caso de erro
     }
 }
 
 startServer();
+

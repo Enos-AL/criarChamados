@@ -1,5 +1,4 @@
 /* src/controller/criarTabelas.ts */
-
 import conectarBanco from '../config/bd'; // Importa a função para conectar ao banco de dados
 import { Request, Response, NextFunction } from 'express'; // Importa tipos do Express
 import {
