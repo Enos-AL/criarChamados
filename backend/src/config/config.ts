@@ -1,5 +1,4 @@
 /* src/config/config.ts */
-/* src/config/config.ts */
 import { config as dotenvConfig } from 'dotenv';
 import path from 'path';
 
